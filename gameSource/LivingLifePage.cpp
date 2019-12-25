@@ -6675,17 +6675,34 @@ void LivingLifePage::draw( doublePair inViewCenter,
 
         // are we holding the target of our current hint?
         // if so, hide hint arrows
-        if( mLastHintSortedList.size() > mCurrentHintIndex ) {    
+        if( heldID > 0 &&
+            mLastHintSortedList.size() > mCurrentHintIndex ) {    
+            
             TransRecord *t = 
                 mLastHintSortedList.getElementDirect( mCurrentHintIndex );
             
+            char holdingActor = false;
+            char holdingTarget = false;
+            
+            int heldParent = getObjectParent( heldID );
+
+            if( t->actor > 0 &&
+                getObjectParent( t->actor ) == heldParent ) {
+                holdingActor = true;
+                }
+            if( t->target > 0 &&
+                getObjectParent( t->target ) == heldParent ) {
+                holdingTarget = true;
+                }
+            
+
             
             if( t->newActor > 0 && 
-                t->newActor == heldID  && t->actor != heldID ) {
+                t->newActor == heldID  && ! holdingActor ) {
                 hit = true;
                 }
             else if( t->newTarget > 0 && 
-                     t->newTarget == heldID && t->target != heldID ) {
+                     t->newTarget == heldID && ! holdingTarget ) {
                 hit = true;
                 }
             }
@@ -9929,7 +9946,7 @@ void LivingLifePage::draw( doublePair inViewCenter,
                     desToDelete = des;
                     }
                 
-                if( otherObj->leadershipNameTag != NULL ) {
+                if( otherObj != NULL && otherObj->leadershipNameTag != NULL ) {
                     if( otherObj->name == NULL ) {
                         des = autoSprintf( "%s - %s",
                                            otherObj->leadershipNameTag, des );
@@ -11462,11 +11479,12 @@ char *LivingLifePage::getHintMessage( int inObjectID, int inIndex,
         mCurrentHintTargetObject[1] = 0;
 
         // never show visual pointer toward what we're holding
-        if( target > 0 && target != inObjectID && 
+        // we handle this elsewhere too, so just obey inDoNotPoint here
+        if( target > 0 && 
             target != inDoNotPointAtThis ) {
             mCurrentHintTargetObject[1] = target;
             }
-        if( actor > 0 && actor != inObjectID &&
+        if( actor > 0 &&
                  actor != inDoNotPointAtThis ) {
             mCurrentHintTargetObject[0] = actor;
             }
@@ -11749,6 +11767,7 @@ static const char *badgeColors[NUM_BADGE_COLORS] = { "#e6194B",
 
 
 
+static char justHitTab = false;
 
         
 void LivingLifePage::step() {
@@ -12337,7 +12356,8 @@ void LivingLifePage::step() {
         if( ( isHintFilterStringInvalid() &&
               mCurrentHintObjectID != mNextHintObjectID ) ||
             mCurrentHintIndex != mNextHintIndex ||
-            mForceHintRefresh ) {
+            mForceHintRefresh ||
+            justHitTab ) {
             
             char autoHint = false;
             
@@ -12349,7 +12369,11 @@ void LivingLifePage::step() {
                 // and they don't have a filter applied currently
                 autoHint = true;
                 }
-
+            // or they just hit TAB 
+            if( justHitTab ) {
+                autoHint = false;
+                }
+            justHitTab = false;
             
             mForceHintRefresh = false;
 
@@ -16346,7 +16370,8 @@ void LivingLifePage::step() {
                                         getObject( existing->holdingID );
                                     
 
-                                    if( oldHeld > 0 && 
+                                    if( oldHeld > 0 &&
+                                        oldHeld != existing->holdingID &&
                                         heldTransitionSourceID == -1 ) {
                                         // held object auto-decayed from 
                                         // some other object
@@ -16412,7 +16437,8 @@ void LivingLifePage::step() {
                                         }
                                     
                                     
-                                    if( ( ! otherSoundPlayed ||
+                                    if( oldHeld != existing->holdingID &&
+                                        ( ! otherSoundPlayed ||
                                           heldObj->creationSoundForce )
                                           && 
                                         ! clothingChanged &&
@@ -22241,15 +22267,14 @@ void LivingLifePage::pointerDown( float inX, float inY ) {
             delete [] killMessage;
             
 
-            // try to walk near victim right away
-            killMode = true;
-                    
+            // given that there's a cool-down now before killing, don't
+            // auto walk there.
+            // Player will enter kill state, and we'll let them navivate there
+            // after that.
             ourLiveObject->killMode = true;
             ourLiveObject->killWithID = ourLiveObject->holdingID;
-
-            // ignore mod-click from here on out, to avoid
-            // force-dropping weapon
-            modClick = false;
+            
+            return;
             }
         }
     
@@ -23372,6 +23397,7 @@ void LivingLifePage::keyDown( unsigned char inASCII ) {
                     if( mNextHintIndex < 0 ) {
                         mNextHintIndex += num;
                         }
+                    justHitTab = true;
                     }
                 }
             break;
